@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.sist.web.dao.UserDao">
+	<resultMap type="com.sist.web.model.User" id="userResultMap">  
+		<id column="USER_ID" property="userId" /> <!-- id==기본키 -->
+		<result column="USER_PWD" property="userPwd" />
+		<result column="USER_NAME" property="userName" />
+		<result column="USER_EMAIL" property="userEmail" />
+		<result column="STATUS" property="status" />
+		<result column="REG_DATE" property="regDate" />
+	</resultMap>
+<!-- namespace 는 해당 select id 를 가리킨다
+resultMap id 와 select resultMap 명이 동일해야한다 
+별칭이 동일해야한다
+객체를 담을 때 (리턴해야하는 값이 여러개일때 ) resultMap 을 사용한다
+
+/user/login2 를 추가
+> 컨트롤러의 리퀘스트 매핑을 2로 추가 생성, 서비스와 다오도 2로 추가 생성(xml 에서 셀렉트 아이디값 추가)
+-->
+	
+<!-- public User userSelect(String userId) 와 동일 -->
+<!-- 여기있는 아이디 명이 인터페이스에 있는 메소드명과 동일해야한다 
+User.java 와 짝궁을 맞춰주는 곳이 : resultMap-->
+	<select id="userSelect" parameterType="String" resultMap="userResultMap">
+		SELECT USER_ID, 
+		    NVL(USER_PWD,'') AS USER_PWD, 
+		    NVL(USER_NAME,'') AS USER_NAME, 
+		    NVL(USER_EMAIL,'') AS USER_EMAIL, 
+		    NVL(STATUS,'N') AS STATUS, 
+		    NVL(TO_CHAR(REG_DATE,'YYYY.MM.DD HH24:MI:SS'),'') AS REG_DATE
+		  FROM TBL_USER
+		 WHERE USER_ID = #{value}
+	</select>
+	
+	<insert id="userInsert" parameterType="com.sist.web.model.User" >
+		INSERT INTO TBL_USER (USER_ID, USER_PWD, USER_NAME, USER_EMAIL, STATUS, REG_DATE)
+		VALUES (#{userId},#{userPwd},#{userName},#{userEmail},#{status},SYSDATE)
+	</insert>
+	
+	<update id="userUpdate" parameterType="com.sist.web.model.User">
+		UPDATE TBL_USER
+		   SET USER_PWD = #{userPwd},
+		       USER_NAME = #{userName},
+		       USER_EMAIL = #{userEmail}
+		 WHERE USER_ID = #{userId}
+	</update>
+	
+</mapper>
+
+<!-- 1. select 에서 먼저 ID 를 통해서 다오에 해당하는 메소드명을 지정해준 후 parameter type 에는 매개 변수 데이터 타입,
+resultMap 에는 User.java 와 UserDao.java 를 엮어준다 
+	2. mapper 에서는 type 에서는 유저 객체의 위치. 아이디는 select 의 resultMap 이름과 맞춰준다
+	   그후 기본키만 id 를 할당해주고 나머지 컬럼에는 result 로 할당해준다
+	3. resultMap 의 속성에는 User.java 변수를 넣어주고 column 에는 DB 에 있는 이름을 넣어준다
+	4. 그 후 유저다오에서 인터페이스 메소드를 생성해주면 XML 을 통해 연결된다-->

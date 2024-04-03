@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sist.web.dao.HiBoardDao" >
+	<!-- 게시판 ResultMap -->
+	<resultMap id="hiBoardResultMap" type="com.sist.web.model.HiBoard" >
+		<id column="HIBBS_SEQ" property="hiBbsSeq" />
+		<result column="USER_ID" property="userId" />
+		<result column="USER_NAME" property="userName" />
+		<result column="USER_EMAIL" property="userEmail" />
+		<result column="HIBBS_GROUP" property="hiBbsGroup" />
+		<result column="HIBBS_ORDER" property="hiBbsOrder" />
+		<result column="HIBBS_INDENT" property="hiBbsIndent" />
+		<result column="HIBBS_TITLE" property="hiBbsTitle" />
+		<result column="HIBBS_CONTENT" property="hiBbsContent" />
+		<result column="HIBBS_READ_CNT" property="hiBbsReadCnt" />
+		<result column="REG_DATE" property="regDate" />
+		<result column="HIBBS_PARENT" property="hiBbsParent" />
+	</resultMap>
+
+	<!-- 게시물 첨부파일 ResultMap -->
+	<resultMap id="hiBoardFileResultMap" type="com.sist.web.model.HiBoardFile" >
+		<id column="HIBBS_SEQ" property="hiBbsSeq" />
+		<id column="FILE_SEQ" property="fileSeq" />
+		<result column="FILE_ORG_NAME" property="fileOrgName" />
+		<result column="FILE_NAME" property="fileName" />
+		<result column="FILE_EXT" property="fileExt" />
+		<result column="FILE_SIZE" property="fileSize" />
+		<result column="REG_DATE" property="regDate" />
+	</resultMap>
+	
+	<!-- 게시판 리스트 -->
+	<select id="boardList" parameterType="com.sist.web.model.HiBoard" resultMap="hiBoardResultMap" >
+		SELECT HIBBS_SEQ, USER_ID, USER_NAME, USER_EMAIL, HIBBS_GROUP, HIBBS_ORDER, HIBBS_INDENT, HIBBS_TITLE, HIBBS_CONTENT, REG_DATE, HIBBS_READ_CNT, HIBBS_PARENT
+		  FROM (
+		        SELECT ROWNUM RNUM, HIBBS_SEQ, USER_ID, USER_NAME, USER_EMAIL, HIBBS_GROUP, HIBBS_ORDER, HIBBS_INDENT, HIBBS_TITLE, HIBBS_CONTENT, REG_DATE, HIBBS_READ_CNT, HIBBS_PARENT
+		          FROM (
+		                SELECT B.HIBBS_SEQ HIBBS_SEQ
+		                      , NVL(B.USER_ID,'') USER_ID
+		                      , NVL(U.USER_NAME,'') USER_NAME
+		                      , NVL(U.USER_EMAIL,'') USER_EMAIL
+		                      , NVL(B.HIBBS_GROUP,0) HIBBS_GROUP
+		                      , NVL(B.HIBBS_ORDER,0) HIBBS_ORDER
+		                      , NVL(B.HIBBS_INDENT,0) HIBBS_INDENT 
+		                      , NVL(B.HIBBS_TITLE,'') HIBBS_TITLE
+		                      , NVL(B.HIBBS_CONTENT,'') HIBBS_CONTENT
+		                      , NVL(B.HIBBS_READ_CNT,0) HIBBS_READ_CNT
+		                      , NVL(TO_CHAR(B.REG_DATE ,'YYYY.MM.DD HH24:MI:SS'),'') REG_DATE
+		                      , NVL(B.HIBBS_PARENT,'') HIBBS_PARENT
+		                 FROM TBL_HIBOARD B, TBL_USER U
+		                WHERE B.USER_ID = U.USER_ID
+		         <if test=' searchType != null and searchType != "" and searchValue != null and searchValue != "" '>
+		              <choose> <!-- "" 로 우리는 스트링이라고 알려주는거고 MyBatis 에서는 자동적으로 equals 로 비교해준다 -->
+		                  <when test = 'searchType=="1" '>AND U.USER_NAME LIKE '%'||#{searchValue}||'%'</when>
+		                  <when test = 'searchType=="2" '>AND B.HIBBS_TITLE LIKE '%'||#{searchValue}||'%'</when>
+		                  <when test = 'searchType=="3" '>AND DBMS_LOB.INSTR(B.HIBBS_CONTENT, #{searchValue}) > 0</when>
+		              </choose>
+		         </if>     
+		                ORDER BY B.HIBBS_GROUP DESC, B.HIBBS_ORDER
+		                ) 
+		        )
+		WHERE RNUM <![CDATA[>=]]> #{startRow}
+		  AND RNUM <![CDATA[<=]]> #{endRow}
+	</select>
+	
+	<!-- 게시물 등록 -->
+	<insert id="boardInsert" parameterType="com.sist.web.model.HiBoard">
+		<!-- 선행처리기 : 시퀀스 생성 (게시물 테이블이랑 파일 테이블도 동일한 시퀀스 번호로 같이 업로드 할 수 있도록)
+			리턴 타입:long, keyProperty:현재 리턴한 값을 어느 컬럼에 저장할지(객체에 세팅해준다), order:before 는 insert 전에 실행하도록-->	
+		<selectKey resultType="long" keyProperty="hiBbsSeq" order="BEFORE" >
+			SELECT SEQ_HIBOARD_SEQ.NEXTVAL
+			  FROM DUAL
+		</selectKey>
+		INSERT INTO TBL_HIBOARD 
+			(HIBBS_SEQ, USER_ID, HIBBS_GROUP, HIBBS_ORDER, HIBBS_INDENT,
+			 HIBBS_TITLE, HIBBS_CONTENT, HIBBS_READ_CNT, HIBBS_PARENT, REG_DATE)
+		VALUES (#{hiBbsSeq}, #{userId},#{hiBbsSeq},#{hiBbsOrder},
+				#{hiBbsIndent},#{hiBbsTitle},#{hiBbsContent},0,#{hiBbsParent},SYSDATE)
+	</insert>
+	
+	<!-- 게시물 첨부파일 등록 -->
+	<insert id="boardFileInsert" parameterType="com.sist.web.model.HiBoardFile" >
+		 INSERT INTO TBL_HIBOARD_FILE 
+				 ( HIBBS_SEQ, FILE_SEQ, FILE_ORG_NAME,
+			    FILE_NAME, FILE_EXT, FILE_SIZE, REG_DATE) 
+		 VALUES (#{hiBbsSeq},(SELECT NVL(MAX(FILE_SEQ),0) + 1
+ 				 FROM TBL_HIBOARD_FILE WHERE HIBBS_SEQ = #{hiBbsSeq}),
+ 				 #{fileOrgName},#{fileName},#{fileExt},#{fileSize},SYSDATE)
+	</insert>
+	
+	<!-- 첨부파일 조회 -->
+	<select id="boardFileSelect" parameterType="long" resultMap="hiBoardFileResultMap" >
+		SELECT
+		      HIBBS_SEQ, FILE_SEQ, NVL(FILE_ORG_NAME,'') FILE_ORG_NAME,
+		      NVL(FILE_NAME,'') FILE_NAME, NVL(FILE_EXT,'') FILE_EXT, 
+		      NVL(FILE_SIZE,0) FILE_SIZE, NVL(TO_CHAR(REG_DATE,'YYYY.MM.DD HH24:MI:SS'),'') REG_DATE
+		  FROM
+		      TBL_HIBOARD_FILE
+		 WHERE HIBBS_SEQ = #{value}
+		   AND FILE_SEQ IN (SELECT FILE_SEQ
+ 			   FROM TBL_HIBOARD_FILE WHERE HIBBS_SEQ = #{value})
+	</select>
+	
+	<!-- 총 게시물 갯수 -->
+	<select id="boardListCount" parameterType="com.sist.web.model.HiBoard" resultType="long" >
+		    SELECT COUNT(B.HIBBS_SEQ) AS CNT
+              FROM TBL_HIBOARD B, TBL_USER U
+             WHERE B.USER_ID = U.USER_ID    
+      <if test='searchType != null and searchType != "" and searchValue != null and searchValue != "" '> <!-- 서치, 발루 둘다 빈 값이 아닐 경우 -->
+        <choose>
+        	<when test='searchType == "1" '>
+               AND U.USER_NAME LIKE '%'||#{searchValue}||'%'</when>
+	  		<when test='searchType == "2" '>
+	           AND B.HIBBS_TITLE LIKE '%'||#{searchValue}||'%'</when>
+	  		<when test='searchType == "3" '>
+	           AND DBMS_LOB.INSTR(B.HIBBS_CONTENT, #{searchValue}) > 0 </when>
+		</choose> <!-- order by 는 속도가 오래 걸리기 때문에 굳이 사용하지 않는당 -->
+	 </if>   
+	</select>
+	
+	<!-- 게시물 상세 보기 : 글 번호를 받아서 보여줄거니까 매개변수 long type -->
+	<select id="boardSelect" parameterType="long" resultMap="hiBoardResultMap">
+	  SELECT
+		    B.HIBBS_SEQ AS HIBBS_SEQ, NVL(B.USER_ID,'') AS USER_ID, NVL(U.USER_NAME,'') AS USER_NAME, 
+		    NVL(U.USER_EMAIL,'') AS USER_EMAIL, NVL(B.HIBBS_GROUP,0) AS HIBBS_GROUP, 
+		    NVL(B.HIBBS_ORDER,0) AS HIBBS_ORDER, NVL(B.HIBBS_INDENT,0) AS HIBBS_INDENT, 
+		    NVL(B.HIBBS_TITLE,'') AS HIBBS_TITLE, NVL(B.HIBBS_CONTENT,'') AS HIBBS_CONTENT, 
+		    NVL(B.HIBBS_READ_CNT,0) AS HIBBS_READ_CNT, 
+		    NVL(TO_CHAR(B.REG_DATE,'YYYY.MM.DD HH24:MI:SS'),'') AS REG_DATE, NVL(B.HIBBS_PARENT,0) AS HIBBS_PARENT
+		FROM
+		    TBL_HIBOARD B, TBL_USER U
+	   WHERE 
+		    B.HIBBS_SEQ = #{value}
+		    AND B.USER_ID = U.USER_ID
+	</select>
+	
+	<!-- 게시글 조회 수 증가 : select 제외 리턴 타입이 알아서 처리 건 수 이기 때문에 지정안함-->
+	<update id="boardReadCntPlus" parameterType="long" >
+		UPDATE TBL_HIBOARD
+		   SET HIBBS_READ_CNT = HIBBS_READ_CNT +1
+		 WHERE HIBBS_SEQ = #{value}
+	</update>
+	
+	<!-- 게시글 수정
+	하이보드파일 테이블에는 UUID 값이 들어가있음, 파일은 글을 올리면 업로드 파일에 올라가기 때문에 기존의 파일을 지워주고 다시 업데이트 해줄 것이다 -->
+	<update id="boardUpdate" parameterType="com.sist.web.model.HiBoard" >
+		UPDATE TBL_HIBOARD
+		   SET HIBBS_TITLE = #{hiBbsTitle},
+		       HIBBS_CONTENT = #{hiBbsContent}
+		 WHERE HIBBS_SEQ = #{hiBbsSeq}
+	</update>
+	
+	<!-- 첨부파일 삭제 -->
+	<delete id="boardFileDelete" parameterType="long" >
+		 DELETE FROM TBL_HIBOARD_FILE
+  		  WHERE HIBBS_SEQ = #{value}
+	</delete>
+	
+	<!-- 게시글 삭제 -->
+	<delete id="boardDelete" parameterType="long" >
+		 DELETE FROM TBL_HIBOARD
+		  WHERE HIBBS_SEQ = #{value}
+	</delete>
+	
+	<!-- 글 삭제를 위해 부모글에 해당하는 자식 답변들이 있는지 확인 -->
+	<select id="boardAnswersCount" parameterType="long" resultType="int" >
+		SELECT COUNT(HIBBS_SEQ) AS CNT 
+		  FROM TBL_HIBOARD
+		 WHERE HIBBS_PARENT = #{value}
+	</select>
+	
+	<!-- HIBBS_ORDER (그룹내 순번) 답변 작성 전에 기존에 있던 값을 변경하기 위해서 -->
+	<update id="boardGroupOrderUpdate" parameterType="com.sist.web.model.HiBoard" >
+		  UPDATE TBL_HIBOARD
+		     SET HIBBS_ORDER = HIBBS_ORDER + 1
+		   WHERE HIBBS_GROUP = #{hiBbsGroup}
+		     AND HIBBS_ORDER <![CDATA[>=]]> #{hiBbsOrder}
+	</update><!-- 메인글 다음에 오는 수는 무조건 최소 1 이기 때문에 1을 비교값으로 둔 것 -->
+	
+	<!-- 답변 등록 
+	위에 있는 boardInsert 를 안 쓰는 이유는 해당 그룹번호를 hiBbsSeq 가 아닌 부모 번호를 부여해야하기 때문이다-->
+	<!-- 를 위한 선행 처리기 -->
+	<insert id="boardReplyInsert" parameterType="com.sist.web.model.HiBoard" >
+	<selectKey resultType="long" keyProperty="hiBbsSeq" order="BEFORE" >
+		SELECT SEQ_HIBOARD_SEQ.NEXTVAL FROM DUAL
+	</selectKey> 
+		INSERT INTO TBL_HIBOARD 
+		(
+		    HIBBS_SEQ,
+		    USER_ID,
+		    HIBBS_GROUP,
+		    HIBBS_ORDER,
+		    HIBBS_INDENT,
+		    HIBBS_TITLE,
+		    HIBBS_CONTENT,
+		    HIBBS_READ_CNT,
+		    REG_DATE,
+		    HIBBS_PARENT
+		) 
+		VALUES (#{hiBbsSeq}, #{userId},#{hiBbsGroup},#{hiBbsOrder},#{hiBbsIndent}
+				,#{hiBbsTitle},#{hiBbsContent},0,SYSDATE,#{hiBbsParent})
+	</insert>
+</mapper>
